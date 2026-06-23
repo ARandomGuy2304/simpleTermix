@@ -1,6 +1,6 @@
 .SUFFIXES:
 
-override OUTPUT := os
+override OUTPUT := simpleTermix-core
 
 TOOLCHAIN :=
 TOOLCHAIN_PREFIX :=
@@ -57,7 +57,8 @@ override CFLAGS += \
     -mno-sse \
     -mno-sse2 \
     -mno-red-zone \
-    -mcmodel=kernel
+    -mcmodel=kernel \
+	-ffixed-r15
 
 override CPPFLAGS := \
     -I src \
