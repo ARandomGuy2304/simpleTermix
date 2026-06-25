@@ -57,8 +57,7 @@ override CFLAGS += \
     -mno-sse \
     -mno-sse2 \
     -mno-red-zone \
-    -mcmodel=kernel \
-	-ffixed-r15
+    -mcmodel=kernel
 
 override CPPFLAGS := \
     -I src \
