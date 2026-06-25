@@ -12,5 +12,5 @@ At the end, if done correctly, you get an "image.iso" in the "os" folder.
    Command: `make`.
 3. Download the Limine bootloader and create the ISO file via the provided bash script.
    Command: `bash make.sh` (change the username and password in the bash script if you want, default credentials: username `admin` and password `password123`).
-4. Try the ISO file with QEMU.
-   Command: `qemu-system-x86_64 -cdrom image.iso`.
+4. Try the ISO.
+   On QEMU or flash it on a USB stick and boot from it.
