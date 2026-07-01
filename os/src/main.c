@@ -26,7 +26,7 @@ void kernel_main(void) {
     terminal_print("                               @@\n");
     terminal_print("                               @@\n");
     terminal_print("                               @@\n\n");
-    terminal_print("simpleTermix-v1.4.1\n");
+    terminal_print("simpleTermix-v1.4.2\n");
     terminal_print("Username: ");
 
     for (;;) {
