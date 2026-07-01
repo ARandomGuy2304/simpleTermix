@@ -437,7 +437,7 @@ void execute_command(char *cmd) {
         terminal_print(brand);
         terminal_print("\n");
 
-        terminal_print("OS Kernel: simpleTermix-core-v1.4.1\n");
+        terminal_print("OS Kernel: simpleTermix-core-v1.4.2\n");
         terminal_print("Resolution: ");
         terminal_print(width_buf);
         terminal_print("x");
