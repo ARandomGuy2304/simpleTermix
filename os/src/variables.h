@@ -1,6 +1,5 @@
 #ifndef VARIABLES_H
 #define VARIABLES_H
-#endif
 
 #define CURSOR_BLINK_INTERVAL 100000
 #define NOTE_MAX 100000
@@ -31,3 +30,18 @@ char note[NOTE_MAX];
 
 int shift_pressed = 0;
 int caps_lock = 0;
+
+#define FS_MAX_FILES 64
+#define FS_NAME_MAX 32
+#define FS_CONTENT_MAX 4096
+
+typedef struct {
+    char name[FS_NAME_MAX];
+    char content[FS_CONTENT_MAX];
+    int used;
+} file_t;
+
+file_t filesystem[FS_MAX_FILES];
+int fs_file_count = 0;
+
+#endif

@@ -1,6 +1,5 @@
 #ifndef MAIN_H
 #define MAIN_H
-#endif
 
 #include <stdarg.h>
 #include <stddef.h>
@@ -8,6 +7,7 @@
 
 #include "font.h"
 #include "limine.h"
+#include "panic.h"
 #include "print.h"
 
 volatile struct limine_framebuffer_request framebuffer_request = {
@@ -32,39 +32,6 @@ volatile void *limine_requests[] = {
     (void *)&memmap_request,
     NULL
 };
-
-inline uint64_t get_usable_ram(void) {
-    if (!memmap_request.response)
-        return 0;
-
-    uint64_t total = 0;
-
-    for (uint64_t i = 0; i < memmap_request.response->entry_count; i++) {
-        struct limine_memmap_entry *entry =
-            memmap_request.response->entries[i];
-
-        if (entry->type == LIMINE_MEMMAP_USABLE)
-            total += entry->length;
-    }
-
-    return total;
-}
-
-inline uint64_t get_total_ram(void) {
-    if (!memmap_request.response)
-        return 0;
-
-    uint64_t total = 0;
-
-    for (uint64_t i = 0; i < memmap_request.response->entry_count; i++) {
-        struct limine_memmap_entry *entry =
-            memmap_request.response->entries[i];
-
-        total += entry->length;
-    }
-
-    return total;
-}
 
 int strcmp(const char *s1, const char *s2) {
     while (*s1 && (*s1 == *s2)) {
@@ -221,8 +188,165 @@ int parse_hex_color(const char *str, uint32_t *color) {
     return 1;
 }
 
-inline uint64_t bytes_to_mb(uint64_t bytes) {
-    return bytes / 1000000;
+void str_copy(char *dst, const char *src, int max) {
+    int i = 0;
+    while (src[i] != '\0' && i < max - 1) {
+        dst[i] = src[i];
+        i++;
+    }
+    dst[i] = '\0';
+}
+
+int fs_find(const char *name) {
+    for (int i = 0; i < FS_MAX_FILES; i++) {
+        if (filesystem[i].used && strcmp(filesystem[i].name, name) == 0) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+int fs_find_free_slot(void) {
+    for (int i = 0; i < FS_MAX_FILES; i++) {
+        if (!filesystem[i].used) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+void cmd_create(const char *filename) {
+    if (filename[0] == '\0') {
+        terminal_print("Usage: create <filename>");
+        return;
+    }
+
+    if (fs_find(filename) != -1) {
+        terminal_print("Error: file '");
+        terminal_print(filename);
+        terminal_print("' already exists.");
+        return;
+    }
+
+    int slot = fs_find_free_slot();
+    if (slot == -1) {
+        terminal_print("Error: file storage full.");
+        return;
+    }
+
+    str_copy(filesystem[slot].name, filename, FS_NAME_MAX);
+    filesystem[slot].content[0] = '\0';
+    filesystem[slot].used = 1;
+    fs_file_count++;
+
+    terminal_print("Created file '");
+    terminal_print(filename);
+    terminal_print("'.");
+}
+
+void cmd_rename(char *args) {
+    char *old_name = args;
+    char *new_name = "";
+
+    for (int i = 0; args[i] != '\0'; i++) {
+        if (args[i] == ' ') {
+            args[i] = '\0';
+            new_name = &args[i + 1];
+            break;
+        }
+    }
+
+    if (old_name[0] == '\0' || new_name[0] == '\0') {
+        terminal_print("Usage: rename <filename> <new_filename>");
+        return;
+    }
+
+    int idx = fs_find(old_name);
+    if (idx == -1) {
+        terminal_print("Error: file '");
+        terminal_print(old_name);
+        terminal_print("' not found.");
+        return;
+    }
+
+    if (fs_find(new_name) != -1) {
+        terminal_print("Error: file '");
+        terminal_print(new_name);
+        terminal_print("' already exists.");
+        return;
+    }
+
+    str_copy(filesystem[idx].name, new_name, FS_NAME_MAX);
+
+    terminal_print("Renamed '");
+    terminal_print(old_name);
+    terminal_print("' to '");
+    terminal_print(new_name);
+    terminal_print("'.");
+}
+
+void cmd_list(void) {
+    if (fs_file_count == 0) {
+        terminal_print("No files found.");
+        return;
+    }
+
+    terminal_print("Files:");
+    for (int i = 0; i < FS_MAX_FILES; i++) {
+        if (filesystem[i].used) {
+            terminal_print("\n  ");
+            terminal_print(filesystem[i].name);
+        }
+    }
+}
+
+void cmd_write(char *args) {
+    char *filename = args;
+    char *text = "";
+
+    for (int i = 0; args[i] != '\0'; i++) {
+        if (args[i] == ' ') {
+            args[i] = '\0';
+            text = &args[i + 1];
+            break;
+        }
+    }
+
+    if (filename[0] == '\0') {
+        terminal_print("Usage: write <filename> <text>");
+        return;
+    }
+
+    int idx = fs_find(filename);
+    if (idx == -1) {
+        terminal_print("Error: file '");
+        terminal_print(filename);
+        terminal_print("' not found.");
+        return;
+    }
+
+    str_copy(filesystem[idx].content, text, FS_CONTENT_MAX);
+
+    terminal_print("Wrote to '");
+    terminal_print(filename);
+    terminal_print("'.");
+}
+
+void cmd_read(const char *filename) {
+    if (filename[0] == '\0') {
+        terminal_print("Usage: read <filename>");
+        return;
+    }
+
+    int idx = fs_find(filename);
+    if (idx == -1) {
+        terminal_print("Error: file '");
+        terminal_print(filename);
+        terminal_print("' not found.");
+        return;
+    }
+
+    terminal_print(filesystem[idx].content);
 }
 
 void execute_command(char *cmd) {
@@ -269,20 +393,29 @@ void execute_command(char *cmd) {
 
     if (strcmp(cmd, "help") == 0) {
         terminal_print("Available commands:\n");
-        terminal_print("  help                - Show this application menu\n");
-        terminal_print("  clear               - Clear the terminal\n");
-        terminal_print("  sysinfo             - Display basic information\n");
-        terminal_print("  sleep               - Freeze the OS\n");
-        terminal_print("  echo <text>         - Print arguments to screen\n");
-        terminal_print("  logout              - Log out\n");
-        terminal_print("  blue                - Switch to blue display color\n");
-        terminal_print("  green               - Switch to retro green display color\n");
-        terminal_print("  red                 - Switch to dark red text mode\n");
-        terminal_print("  white               - Reset interface text to white\n");
-        terminal_print("  hex <RRGGBB>        - Set text color using hexadecimal RGB\n");
-        terminal_print("  background <RRGGBB> - Set screen background color using hexadecimal RGB\n");
-        terminal_print("  write_note <text>   - Take a note and save it\n");
-        terminal_print("  read_note           - Read your note\n");
+        terminal_print("  help                       - Show this application menu\n");
+        terminal_print("  clear                      - Clear the terminal\n");
+        terminal_print("  sysinfo                    - Display basic information\n");
+        terminal_print("  sleep                      - Freeze the OS\n");
+        terminal_print("  echo <text>                - Print arguments to screen\n");
+        terminal_print("  logout                     - Log out\n");
+        terminal_print("  blue                       - Switch to blue display color\n");
+        terminal_print("  green                      - Switch to retro green display color\n");
+        terminal_print("  red                        - Switch to dark red text mode\n");
+        terminal_print("  white                      - Reset interface text to white\n");
+        terminal_print("  hex <RRGGBB>               - Set text color using hexadecimal RGB\n");
+        terminal_print("  background <RRGGBB>        - Set screen background color using hexadecimal RGB\n");
+        terminal_print("  write_note <text>          - Take a note and save it\n");
+        terminal_print("  read_note                  - Read your note\n");
+        terminal_print("  create <filename>          - Create a new file\n");
+        terminal_print("  rename <file> <new_name>   - Rename a file\n");
+        terminal_print("  list                       - List all created files\n");
+        terminal_print("  write <filename> <text>    - Write text into a file\n");
+        terminal_print("  read <filename>            - Read a file's content\n");
+        terminal_print("  add <number> <number>      - Add 2 numbers\n");
+        terminal_print("  sub <number> <number>      - Subtract the second number from the first number\n");
+        terminal_print("  mul <number> <number>      - Multiply two numbers\n");
+        terminal_print("  div <number> <number>      - Divide one number from another\n");
     } 
     else if (strcmp(cmd, "clear") == 0) {
         clear_screen();
@@ -369,6 +502,93 @@ void execute_command(char *cmd) {
             terminal_print("Usage: background RRGGBB");
         }
     }
+    else if (strcmp(cmd, "create") == 0) {
+        cmd_create(args);
+    }
+    else if (strcmp(cmd, "rename") == 0) {
+        cmd_rename(args);
+    }
+    else if (strcmp(cmd, "list") == 0) {
+        cmd_list();
+    }
+    else if (strcmp(cmd, "write") == 0) {
+        cmd_write(args);
+    }
+    else if (strcmp(cmd, "read") == 0) {
+        cmd_read(args);
+    }
+    else if (strcmp(cmd, "add") == 0) {
+        char *arg1 = args;
+        char *arg2 = "";
+
+        for (int i = 0; args[i] != '\0'; i++) {
+            if (args[i] == ' ') {
+                args[i] = '\0';
+                arg2 = &args[i + 1];
+                break;
+            }
+        }
+
+        long long a = str_to_float(arg1);
+        long long b = str_to_float(arg2);
+        long long result = a + b;
+
+        terminal_printf("%f\n", result);
+    }
+    else if (strcmp(cmd, "sub") == 0) {
+        char *arg1 = args;
+        char *arg2 = "";
+
+        for (int i = 0; args[i] != '\0'; i++) {
+            if (args[i] == ' ') {
+                args[i] = '\0';
+                arg2 = &args[i + 1];
+                break;
+            }
+        }
+
+        long long a = str_to_float(arg1);
+        long long b = str_to_float(arg2);
+        long long result = a - b;
+
+        terminal_printf("%f\n", result);
+    }
+    else if (strcmp(cmd, "mul") == 0) {
+        char *arg1 = args;
+        char *arg2 = "";
+
+        for (int i = 0; args[i] != '\0'; i++) {
+            if (args[i] == ' ') {
+                args[i] = '\0';
+                arg2 = &args[i + 1];
+                break;
+            }
+        }
+
+        long long a = (long long) str_to_int(arg1);
+        long long b = (long long) str_to_int(arg2);
+        long long result = a * b * 1000;
+
+        terminal_printf("%f\n", result);
+    }
+    else if (strcmp(cmd, "div") == 0) {
+        char *arg1 = args;
+        char *arg2 = "";
+
+        for (int i = 0; args[i] != '\0'; i++) {
+            if (args[i] == ' ') {
+                args[i] = '\0';
+                arg2 = &args[i + 1];
+                break;
+            }
+        }
+
+        long long a = (long long) str_to_int(arg1);
+        long long b = (long long) str_to_int(arg2);
+
+        long long result = (a * 1000) / b;
+        terminal_printf("%f\n", result);
+    }
     else if (strcmp(cmd, "") == 0) {
     }
     else {
@@ -378,3 +598,5 @@ void execute_command(char *cmd) {
 
     terminal_print("\n> ");
 }
+
+#endif

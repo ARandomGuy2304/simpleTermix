@@ -1,6 +1,5 @@
 #ifndef PRINT_H
 #define PRINT_H
-#endif
 
 #include "convert.h"
 #include "variables.h"
@@ -124,6 +123,12 @@ void terminal_printf(const char *format, ...) {
 
                 format += 2;
 
+            } else if (*format == 'f') {
+                long long fixed = va_arg(args, long long);
+                char buf[26];
+                fixed_to_str(fixed, buf);
+                terminal_print(buf);
+
             } else if (*format == '%') {
                 terminal_write_char('%');
             }
@@ -137,3 +142,5 @@ void terminal_printf(const char *format, ...) {
 
     va_end(args);
 }
+
+#endif
